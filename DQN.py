@@ -3,7 +3,6 @@ import numpy as np
 import gym
 import time
 import random
-import Network
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -33,8 +32,7 @@ def new_state(state, action, pressure, t):
     flow = get_flow(pressure)
     return [flow, get_pressure(pressure, action, t), action, desired - flow]
 
-def reset():
-    return [0,0,0,0]
+reset = [0,0,0,0]
 
 def compute_returns_and_advantages(policy, values, episode_transitions, gamma=0.99, lam=0.95):
     rewards = [trans[2] for trans in episode_transitions]
@@ -60,7 +58,7 @@ def reinforcementLearner(eps, alpha, ep, start, replay, r, N):
     value_network = nn.initialize_model(in_features=len(start), out_features=len(actions))
     policy_network = nn.initialize_model(in_features=len(start), out_features=1)
     done = False
-    state = reset()
+    state = reset
     pressure = state[1]
     rewardTotal = 0
     for i in range(ep):
@@ -132,17 +130,17 @@ reset = [0,0,0,0,0]
 eps = 1
 total = 0
 incremental = 0
+replay = []
+start = reset
 for i in range(10000):
-    reward, q = reinforcementLearner(q, eps, 0.9, 100, reset)
-    if (reward > 0):
-        eps*=0.9
-        total+=reward
-        incremental+= reward
+    reward = reinforcementLearner(eps, 0.99, 100, start, replay, 0.95, 20)
+    total+= reward
+    incremental += reward
     if (i % 1000 == 0):
+
         print(incremental/1000)
         incremental = 0
     plt.plot(i, total/(i+1), 'ro')
-print(q)
 plt.title('Plot of points')
 plt.show()
 
