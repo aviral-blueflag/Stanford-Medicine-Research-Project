@@ -36,19 +36,24 @@ def new_state(state, action, pressure, t):
 def reset():
     return [0,0,0,0]
 
-def compute_returns_and_advantages(values, episode_transitions, gamma=0.99, lam=0.95):
+def compute_returns_and_advantages(policy, values, episode_transitions, gamma=0.99, lam=0.95):
     rewards = [trans[2] for trans in episode_transitions]
     returns = []
     advantages = []
     G = 0
     A = 0
+    expected =0
     for i in reversed(range(len(rewards))):
         G = rewards[i] + gamma * G
+        expected += np.log(policy[i])*advantages[i]
         delta = rewards[i] + gamma * values[i + 1] - values[i] if i + 1 < len(values) else rewards[i] - values[i]
         A = delta + gamma * lam * A
+        
+
         returns.insert(0, G)
         advantages.insert(0, A)
-    return advantages, returns
+    expected /= len(rewards)
+    return advantages, returns, expected
 
 
 def reinforcementLearner(eps, alpha, ep, start, replay, r, N):
@@ -61,10 +66,7 @@ def reinforcementLearner(eps, alpha, ep, start, replay, r, N):
     for i in range(ep):
         
         action_probs = policy_network(state)
-        if (np.random.uniform(0,1) < eps):
-            action = actions[np.random.randint(0, len(actions))]
-        else:
-            action = actions[torch.multinomial(action_probs, num_samples=1)]
+        action = actions[torch.multinomial(action_probs, num_samples=1)]
         print(f'Action probabilities: {action_probs}')
 
         # Sample an action based on the probabilities
@@ -83,8 +85,9 @@ def reinforcementLearner(eps, alpha, ep, start, replay, r, N):
             #print("DONE")
             break
     values = value_network(torch.FloatTensor([trans[0] for trans in replay])).detach().numpy()
+    policy_vals = policy_network(torch.FloatTensor([trans[0] for trans in replay])).detach().numpy()
 
-    advantages, returns = compute_returns_and_advantages(values, replay)
+    advantages, returns, expected = compute_returns_and_advantages(policy_vals, values, replay)
     value_loss = 0
     policy_loss = 0
     for i in range(N):
@@ -103,9 +106,6 @@ def reinforcementLearner(eps, alpha, ep, start, replay, r, N):
         value_loss += advantages[n]**2 / N
 
         # Compute log probabilities for the policy network
-        log_prob = torch.log(action_probs.gather(1, action_tensor.unsqueeze(0)).squeeze(1))
-        policy_loss += np.matmul(log_prob, )
-        #old_log_prob = torch.FloatTensor([old_log_probs[n]])
 
         # Compute policy loss for PPO
         '''
@@ -114,15 +114,12 @@ def reinforcementLearner(eps, alpha, ep, start, replay, r, N):
         policy_loss = -torch.min(ratio * advantage, clipped_ratio * advantage)
         policy_
         '''
-        policy_losses.append(policy_loss)
 
     # Average the accumulated losses
-    value_loss = value_loss / N
-    policy_loss = torch.cat(policy_losses).mean()
 
     # Call your separate backpropagation function
-    train_with_loss(value_network, value_loss, lr=0.01)
-    train_with_loss(policy_network, policy_loss, lr=0.01)
+    nn.train_with_loss(value_network, value_loss, lr=0.01)
+    nn.train_with_loss(policy_network, policy_loss, lr=0.01)
 
 
     
