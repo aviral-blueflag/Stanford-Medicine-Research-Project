@@ -23,23 +23,19 @@ def initialize_model(in_features, out_features, h1=8, h2=6):
     model = Model(in_features=in_features, h1=h1, h2=h2, out_features=out_features)
     return model
 
-def train_with_loss(network, loss, lr=0.01):
-    optimizer = torch.optim.Adam(network.parameters(), lr=lr)
+def train_with_loss(network, loss, optimizer, lr=0.01):
     optimizer.zero_grad()
     
-    # Ensure the network parameters have requires_grad=True
-    for param in network.parameters():
-        param.requires_grad = True
+    #print("Before backward pass - Loss grad:", loss.grad if loss.grad is not None else "None")
 
-    # Proper backward pass for loss
     loss.backward()
-    
-    # Print gradients after backward pass
-    for name, param in network.named_parameters():
-        print(f"After backward pass - {name} grad: {param.grad}")
-    
+    torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.0)
+
+
+    #for name, param in network.named_parameters():
+        #print(f"After backward pass - {name} grad: {param.grad}")
+
     optimizer.step()
     
-    # Print parameter values after step
-    for name, param in network.named_parameters():
-        print(f"After optimizer step - {name} data: {param.data}")
+    #for name, param in network.named_parameters():
+        #print(f"After optimizer step - {name} data: {param.data}")

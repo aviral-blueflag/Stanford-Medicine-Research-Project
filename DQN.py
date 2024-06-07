@@ -38,10 +38,13 @@ def compute_returns_and_advantages(values, episode_transitions, gamma=0.99, lam=
         delta = rewards[i] + gamma * values[i + 1] - values[i] if i + 1 < len(values) else rewards[i] - values[i]
         A = delta + gamma * lam * A
         advantages.insert(0, A)
-    return advantages, returns
+    return torch.tensor(advantages, dtype=torch.float32), torch.tensor(returns, dtype=torch.float32)
 
 value_network = initialize_model(in_features=len(reset), out_features=1)
 policy_network = initialize_model(in_features=len(reset), out_features=len(actions))
+
+value_optimizer = torch.optim.Adam(value_network.parameters(), lr=0.01)
+policy_optimizer = torch.optim.Adam(policy_network.parameters(), lr=0.01)
 
 def reinforcementLearner(eps, alpha, ep, start, replay, r, N):
     done = False
@@ -66,59 +69,40 @@ def reinforcementLearner(eps, alpha, ep, start, replay, r, N):
         if done:
             break
 
-    values = value_network(torch.FloatTensor([trans[0] for trans in replay])).detach().numpy()
-    policy_vals = policy_network(torch.FloatTensor([trans[0] for trans in replay]), policy=True).detach().numpy()
+    values = value_network(torch.FloatTensor([trans[0] for trans in replay]))
+    policy_vals = policy_network(torch.FloatTensor([trans[0] for trans in replay]), policy=True)
 
-    advantages, returns = compute_returns_and_advantages(values, replay)
+    advantages, returns = compute_returns_and_advantages(values.detach().numpy(), replay)
 
-    value_loss = 0.0
-    policy_loss = 0.0
     for i in range(N):
         n = np.random.randint(0, len(replay))
         state, action_index, reward, actions_prob = replay[n]
         state_tensor = torch.FloatTensor(state).unsqueeze(0)
         advantage = advantages[n]
+        G = returns[n]
 
-        value_pred = value_network(state_tensor)
-        value_loss += (advantage ** 2) / N
+        value_estimate = value_network(state_tensor)
+        value_loss = F.mse_loss(value_estimate, torch.tensor([[G]], dtype=torch.float32))
 
-        # Convert policy_vals[n] to a tensor
-        log_prob = torch.log(torch.tensor(policy_vals[n], dtype=torch.float32))
-        policy_loss += (log_prob[action_index] * advantage).item() / N
+        policy_prob = policy_network(state_tensor, policy=True)
+        policy_loss = -torch.log(policy_prob[0, action_index]) * advantage
 
-    # Ensure losses are scalar values and convert them to tensors with requires_grad=True
-    value_loss = torch.tensor(value_loss, requires_grad=True)
-    policy_loss = torch.tensor(policy_loss, requires_grad=True)
-
-    print("Before backward pass - Value loss:", value_loss)
-    print("Before backward pass - Policy loss:", policy_loss)
-    
-    value_loss.backward()
-    policy_loss.backward()
-
-    print("After backward pass - Value loss grad:", value_loss.grad)
-    print("After backward pass - Policy loss grad:", policy_loss.grad)
-
-    train_with_loss(value_network, value_loss, lr=0.01)
-    train_with_loss(policy_network, -policy_loss, lr=0.01)
+        train_with_loss(value_network, value_loss, value_optimizer, lr=0.01)
+        train_with_loss(policy_network, policy_loss, policy_optimizer, lr=0.01)
 
     return rewardTotal
 
-reset = [0, 0, 0, 0, desired]
-eps = 1
-total = 0
-incremental = 0
-replay = []
-start = reset
+# Training example
+episodes = 1000
+replay_memory = []
+total_rewards = []
 
-for i in range(10000):
-    reward = reinforcementLearner(eps, 0.99, 100, start, replay, 0.95, 20)
-    total += reward
-    incremental += reward
-    if (i % 10 == 0):
-        print(incremental / 10)
-        incremental = 0
-        
-    plt.plot(i, total / (i + 1), 'ro')
-plt.title('Plot of points')
+for episode in range(episodes):
+    reward = reinforcementLearner(1.0, 0.99, 100, reset, replay_memory, 0.95, 20)
+    total_rewards.append(reward)
+    print(f"Episode {episode + 1}, Total Reward: {reward}")
+
+plt.plot(total_rewards)
+plt.xlabel('Episode')
+plt.ylabel('Total Reward')
 plt.show()
