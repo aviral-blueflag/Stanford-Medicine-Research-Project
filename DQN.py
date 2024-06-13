@@ -3,31 +3,11 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from nn import initialize_model, train_with_loss
+from env import *
+torch.autograd.set_detect_anomaly(True)
 
-mu, L, r = 1, 1, 1
-desired = 5
-noise = 0.1
 
-# Environment
-actions = [desired / 2 + i * desired / 10 for i in range(10)]
-
-def get_pressure(prevPressure, setP, deltaT):
-    return prevPressure + (setP - prevPressure) * (1 - np.exp(-deltaT / 2))
-
-def get_flow(pressure):
-    return pressure * np.pi * r**4 / (8 * mu * L) * np.random.uniform(1 - noise, 1 + noise)
-
-def get_reward(flow):
-    return -(desired - flow) ** 2
-
-def new_state(state, action, pressure, t):
-    flow = get_flow(pressure)
-    return [flow, get_pressure(pressure, action, t), action, desired - flow, state[4]]
-
-reset = [0, 0, 0, 0, desired]
-
-def compute_returns_and_advantages(values, episode_transitions, gamma=0.99, lam=0.95):
-    rewards = [trans[2] for trans in episode_transitions]
+def compute_returns_and_advantages(values, rewards, gamma=0.99, lam=0.95):
     returns = []
     advantages = []
     G = 0
@@ -38,7 +18,9 @@ def compute_returns_and_advantages(values, episode_transitions, gamma=0.99, lam=
         delta = rewards[i] + gamma * values[i + 1] - values[i] if i + 1 < len(values) else rewards[i] - values[i]
         A = delta + gamma * lam * A
         advantages.insert(0, A)
-    return torch.tensor(advantages, dtype=torch.float32), torch.tensor(returns, dtype=torch.float32)
+    advantages = np.array(advantages)
+    returns = np.array(returns)
+    return advantages, returns
 
 value_network = initialize_model(in_features=len(reset), out_features=1)
 policy_network = initialize_model(in_features=len(reset), out_features=len(actions))
@@ -46,7 +28,8 @@ policy_network = initialize_model(in_features=len(reset), out_features=len(actio
 value_optimizer = torch.optim.Adam(value_network.parameters(), lr=0.01)
 policy_optimizer = torch.optim.Adam(policy_network.parameters(), lr=0.01)
 
-def reinforcementLearner(eps, alpha, ep, start, replay, r, N):
+def pickAction(ep, actions):
+    replay = []
     done = False
     state = reset
     pressure = state[1]
@@ -63,34 +46,96 @@ def reinforcementLearner(eps, alpha, ep, start, replay, r, N):
         flow = get_flow(pressure)
         reward = get_reward(flow)
         rewardTotal += reward
+        
 
-        replay.append([state, action_index, reward, action_probs])  # Store action_index instead of action
+        replay.append((state, action_index, reward, action_probs[0, action_index].item()))
 
-        if done:
-            break
 
-    values = value_network(torch.FloatTensor([trans[0] for trans in replay]))
-    policy_vals = policy_network(torch.FloatTensor([trans[0] for trans in replay]), policy=True)
+    replay = np.array(replay, dtype=object)
+    return rewardTotal, replay
 
-    advantages, returns = compute_returns_and_advantages(values.detach().numpy(), replay)
+def sample_replays(replay_buffer, n):
+    # Convert replay buffer to a NumPy array if it is not already
+    if not isinstance(replay_buffer, np.ndarray):
+        replay_buffer = np.array(replay_buffer)
+    # Randomly sample n indices from the replay buffer
+    indices = np.random.choice(len(replay_buffer), size=n, replace=False)
+    # Use the indices to select the replays
+    sampled_replays = replay_buffer[indices]
+    return sampled_replays
+def train(values, advantages, returns, states, action_indices, action_probs):
+    # Convert NumPy arrays to PyTorch tensors correctly
+    values = torch.tensor(values, dtype=torch.float32)  # No need for requires_grad here
+    advantages = torch.tensor(advantages, dtype=torch.float32)  # No need for requires_grad here
+    returns = torch.tensor(returns, dtype=torch.float32)  # No need for requires_grad here
+    states = torch.tensor(states, dtype=torch.float32)  # No need for requires_grad here
+    action_indices = torch.tensor(action_indices, dtype=torch.int64)  # No need for requires_grad here
+    action_probs = torch.tensor(action_probs, dtype=torch.float32)  # No need for requires_grad here
 
-    for i in range(N):
-        n = np.random.randint(0, len(replay))
-        state, action_index, reward, actions_prob = replay[n]
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
-        advantage = advantages[n]
-        G = returns[n]
+    # Debug prints to check shapes
+    print("Values shape:", values.shape)
+    print("Advantages shape:", advantages.shape)
+    print("Returns shape:", returns.shape)
+    print("States shape:", states.shape)
+    print("Action indices shape:", action_indices.shape)
+    print("Action probs shape:", action_probs.shape)
 
-        value_estimate = value_network(state_tensor)
-        value_loss = F.mse_loss(value_estimate, torch.tensor([[G]], dtype=torch.float32))
+    # Ensure all tensors have the correct shape (adding batch dimension if necessary)
+    if len(states.shape) == 1:
+        states = states.unsqueeze(0)
+    if len(values.shape) == 1:
+        values = values.unsqueeze(0)
+    if len(advantages.shape) == 1:
+        advantages = advantages.unsqueeze(0)
+    if len(returns.shape) == 1:
+        returns = returns.unsqueeze(0)
 
-        policy_prob = policy_network(state_tensor, policy=True)
-        policy_loss = -torch.log(policy_prob[0, action_index]) * advantage
+    # Ensure action_probs is a 1D tensor matching action_indices
+    if action_probs.dim() != 1 or action_probs.shape[0] != action_indices.shape[0]:
+        raise ValueError("action_probs must be a 1D tensor with the same length as action_indices")
 
-        train_with_loss(value_network, value_loss, value_optimizer, lr=0.01)
-        train_with_loss(policy_network, policy_loss, policy_optimizer, lr=0.01)
+    # Compute value predictions
+    value_predictions = value_network(states)
+    
+    # Ensure value_predictions and returns have the same shape
+    if value_predictions.shape != returns.shape:
+        value_predictions = value_predictions.view_as(returns)
 
+    # Compute value loss (Mean Squared Error)
+    value_loss = F.mse_loss(value_predictions, returns)
+
+    # Compute log probabilities of the selected actions
+    log_probs = torch.log(action_probs)
+
+    # Compute policy loss
+    policy_loss = -(log_probs * advantages).mean()
+
+    # Perform backpropagation and optimization step for value network
+    value_optimizer.zero_grad()
+    value_loss.backward(retain_graph=True)
+    value_optimizer.step()
+
+    # Perform backpropagation and optimization step for policy network
+    policy_optimizer.zero_grad()
+    policy_loss.backward(retain_graph=True)
+    policy_optimizer.step()
+
+    return value_loss.item(), policy_loss.item()
+
+
+def reinforcementLearner(actions, N, ep):
+    rewardTotal, replay = pickAction(ep, actions)
+    replay = sample_replays(replay, N)
+    states = np.stack(replay[:, 0])
+    indices = np.stack(replay[:, 1])
+    rewards = np.stack(replay[:, 2])
+    probs = np.stack(replay[:, 3])
+    values = value_network(torch.FloatTensor(states))
+    advantages, returns = compute_returns_and_advantages(values.detach().numpy(), rewards)
+    train(values, advantages, returns, states, indices, probs)
     return rewardTotal
+
+
 
 # Training example
 episodes = 1000
@@ -98,7 +143,7 @@ replay_memory = []
 total_rewards = []
 
 for episode in range(episodes):
-    reward = reinforcementLearner(1.0, 0.99, 100, reset, replay_memory, 0.95, 20)
+    reward = reinforcementLearner(actions, 10, 100)
     total_rewards.append(reward)
     print(f"Episode {episode + 1}, Total Reward: {reward}")
 
