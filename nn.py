@@ -19,7 +19,7 @@ class Model(nn.Module):
         else:
             return x
 
-def initialize_model(in_features, out_features, h1=8, h2=6):
+def initialize_model(in_features, out_features, h1=64, h2=64):
     model = Model(in_features=in_features, h1=h1, h2=h2, out_features=out_features)
     return model
 
