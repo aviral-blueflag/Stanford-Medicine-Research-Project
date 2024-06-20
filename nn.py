@@ -24,7 +24,7 @@ def initialize_model(in_features, out_features, h1=64, h2=64):
     return model
 
 
-def train_with_loss(network, loss, optimizer, lr=0.01):
+def train_with_loss(network, loss, optimizer):
     optimizer.zero_grad()
     
     print("Before backward pass - Loss value:", loss.item())
@@ -32,12 +32,12 @@ def train_with_loss(network, loss, optimizer, lr=0.01):
 
     loss.backward(retain_graph=True)
     
-    #torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.0)
+    torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.0)
 
-    for name, param in network.named_parameters():
-        print(f"After backward pass - {name} grad: {param.grad}") 
+    #for name, param in network.named_parameters():
+        #print(f"After backward pass - {name} grad: {param.grad}") 
 
     optimizer.step()
     
-    for name, param in network.named_parameters():
-        print(f"After optimizer step - {name} data: {param.data}") 
+    #for name, param in network.named_parameters():
+        #print(f"After optimizer step - {name} data: {param.data}") 
