@@ -171,6 +171,7 @@ for episode in range(num_episodes):
         if len(agent.critic_losses) > 0 and len(agent.actor_losses) > 0:
             print(f"Episode: {episode}, Reward: {episode_reward}, Critic Loss: {agent.critic_losses[-1]}, Actor Loss: {agent.actor_losses[-1]}")
 
+torch.save(agent.actor.state_dict(), 'DDPG_actor.pth')
 print("Training finished!")
 
 # Plotting the rewards

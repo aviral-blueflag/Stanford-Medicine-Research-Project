@@ -2,7 +2,7 @@ import numpy as np
 
 mu, L, r = 1, 1, 1
 desired = 5
-noise = 0.02
+noise = 0.005
 
 def get_pressure(prevPressure, setP):
     return prevPressure + (setP - prevPressure) * (1 - np.exp(-0.1))
