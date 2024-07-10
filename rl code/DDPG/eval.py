@@ -17,7 +17,7 @@ action_dim = 1
 max_action = 13.2 #12.73
 
 actor = Actor(state_dim, action_dim, max_action).to(device)
-actor.load_state_dict(torch.load('DDPG\DDPG_actor.pth'))
+actor.load_state_dict(torch.load('DDPG_actor.pth'))
 actor.eval()  # Set the model to evaluation mode
 
 def select_action(state):

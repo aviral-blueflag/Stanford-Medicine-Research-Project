@@ -119,7 +119,7 @@ max_action = 13 # Updated max_action based on flow calculations
 
 agent = DDPG(state_dim, action_dim, max_action)
 
-num_episodes = 50
+num_episodes = 1000
 episode_length = 200
 warm_up_steps = 1000
 

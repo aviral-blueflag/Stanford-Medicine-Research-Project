@@ -4,8 +4,10 @@ import torch
 import torch.nn.functional as F
 from nn import initialize_model, train_with_loss
 from env import *
+torch.autograd.set_detect_anomaly(True)
+env = FlowControlEnv()
 
-
+actions = [0.2*i for i in range(100)]
 def compute_returns_and_advantages(values, rewards, gamma=0.95):
     returns = []
     advantages = []
@@ -22,33 +24,35 @@ def compute_returns_and_advantages(values, rewards, gamma=0.95):
     return advantages, returns
 
 
-value_network = initialize_model(in_features=len(reset), out_features=1)
-policy_network = initialize_model(in_features=len(reset), out_features=len(actions))
+value_network = initialize_model(in_features=3, out_features=1)
+policy_network = initialize_model(in_features=3, out_features=len(actions))
 
 value_optimizer = torch.optim.Adam(value_network.parameters())
 policy_optimizer = torch.optim.Adam(policy_network.parameters())
 
 # Implementing a learning rate scheduler
-#value_scheduler = torch.optim.lr_scheduler.StepLR(value_optimizer, step_size=100, gamma=0.9)
-#policy_scheduler = torch.optim.lr_scheduler.StepLR(policy_optimizer, step_size=100, gamma=0.9)
+value_scheduler = torch.optim.lr_scheduler.StepLR(value_optimizer, step_size=100, gamma=0.9)
+policy_scheduler = torch.optim.lr_scheduler.StepLR(policy_optimizer, step_size=100, gamma=0.9)
 
 def pickAction(ep, actions, plot=False):
     replay = []
-    state = reset
+    state = env.reset()
     pressure = state[1]
     rewardTotal = 0
     flows = []
+    flow = 0
     for i in range(ep):
         state_tensor = torch.FloatTensor(state).unsqueeze(0)
         action_probs = policy_network(state_tensor, policy=True)
         action_index = torch.multinomial(action_probs, num_samples=1).item()  # Sample action index
         action = actions[action_index]  # Get the actual action value
-        pressure = get_pressure(pressure, action)
-        flow = get_flow(pressure)
-        state = new_state(action, pressure, flow)
+
+        state = env.new_state(action, pressure, flow)
+        pressure = env.get_pressure(pressure, action)
+        flow = env.get_flow(pressure)
         if plot:
             flows.append(flow)
-        reward = get_reward(flow)
+        reward = env.get_reward(flow)
         rewardTotal += reward
 
         replay.append((state, action_index, reward, action_probs[0, action_index]))
@@ -94,12 +98,10 @@ def train(values, advantages, returns, states, action_indices, action_probs):
 
     value_optimizer.zero_grad()
     value_loss.backward(retain_graph=True)
-    torch.nn.utils.clip_grad_norm_(policy_network.parameters(), max_norm=1.0)
     value_optimizer.step()
 
     policy_optimizer.zero_grad()
     policy_loss.backward(retain_graph=True)
-    torch.nn.utils.clip_grad_norm_(policy_network.parameters(), max_norm=1.0)
     policy_optimizer.step()
 
     return value_loss.item(), policy_loss.item()
@@ -118,8 +120,8 @@ def reinforcementLearner(actions, N, ep, plot):
     train(values, advantages, returns, states, indices, probs)
 
     # Update the learning rate
-    #value_scheduler.step()
-    #policy_scheduler.step()
+    value_scheduler.step()
+    policy_scheduler.step()
 
     return rewardTotal, flows
 
@@ -132,7 +134,7 @@ total_rewards = []
 counter = 0
 for episode in range(episodes):
     plot = (episode == episodes - 1)
-    reward, flows = reinforcementLearner(actions, 20, 200, plot)
+    reward, flows = reinforcementLearner(actions, 20, 100, plot)
     if plot:
         plt.figure()
         plt.plot(flows)
