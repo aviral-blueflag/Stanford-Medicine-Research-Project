@@ -2,24 +2,28 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import numpy as np
-
-class NN(nn.Module):
-    def __init__(self, inlayers, out):
-        super(NN, self).__init__()
+class FeedForwardNN(nn.Module):
+    def __init__(self, inlayers, out, is_actor=False):
+        super(FeedForwardNN, self).__init__()
         self.l1 = nn.Linear(inlayers, 64)
         self.l2 = nn.Linear(64, 64)
         self.l3 = nn.Linear(64, out)
+        self.is_actor = is_actor
+    
     
     def forward(self, obs):
+        # Convert observation to tensor if it's a numpy array
+        #print("HELLO?")
         if isinstance(obs, np.ndarray):
-            x = torch.tensor(obs, dtype=torch.float)
-        x = obs
-        #print(f"Input shape: {x.shape}")  # Debugging line
-        act1 = F.relu(self.l1(x))
-        #print(f"Shape after l1: {act1.shape}")  # Debugging line
-        act2 = F.relu(self.l2(act1))
-        #print(f"Shape after l2: {act2.shape}")  # Debugging line
-        act3 = F.relu(self.l3(act2))
-        #print(f"Shape after l3: {act3.shape}")  # Debugging line
-        return act3
+            obs = torch.tensor(obs, dtype=torch.float)
+        
+        activation1 = F.relu(self.l1(obs))
+        #print("act1", activation1)
+        activation2 = F.relu(self.l2(activation1))
+        #print("act2", activation2)
+        output = self.l3(activation2)
+        if self.is_actor:
+            output = F.sigmoid(output) * 20
+        #print("output", output)
+        return output
     

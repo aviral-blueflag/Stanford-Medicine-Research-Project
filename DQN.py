@@ -134,7 +134,7 @@ total_rewards = []
 counter = 0
 for episode in range(episodes):
     plot = (episode == episodes - 1)
-    reward, flows = reinforcementLearner(actions, 20, 200, plot)
+    reward, flows = reinforcementLearner(actions, 50, 200, plot)
     if plot:
         plt.figure()
         plt.plot(flows)

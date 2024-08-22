@@ -7,7 +7,7 @@ class FlowControlEnv(gym.Env):
         super(FlowControlEnv, self).__init__()
         
         # Define action and observation space
-        self.action_space = spaces.Box(low=np.array([0]), high=np.array([5]), dtype=np.float32)
+        self.action_space = spaces.Box(low=np.array([0]), high=np.array([20]), dtype=np.float32)
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32)
         
         # Constants
@@ -29,7 +29,7 @@ class FlowControlEnv(gym.Env):
         setP = action[0]  # Extract the action value from the array
         
         # Get previous state values
-        prevPressure, _, _ = self.state
+        _, prevPressure, _ = self.state
         
         # Calculate new pressure
         pressure = self.get_pressure(prevPressure, setP)
@@ -55,7 +55,7 @@ class FlowControlEnv(gym.Env):
         return prevPressure + (setP - prevPressure) * (1 - np.exp(-0.1))
     
     def get_flow(self, pressure):
-        return pressure * np.pi * self.r**4 / (8 * self.mu * self.L) * np.random.normal(1 - self.noise, 1 + self.noise)
+        return pressure * np.pi * self.r**4 / (8 * self.mu * self.L) * np.random.normal(1, self.noise)
     
     def get_reward(self, flow):
         return -(self.desired - flow) ** 2

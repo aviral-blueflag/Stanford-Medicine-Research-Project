@@ -19,8 +19,11 @@ import random
 
 random.seed(42)  # For reproducibility
 arr = []
+tot_time = 0
 for i in range(50):
-    arr.append([random.uniform(pressure_min, pressure_max), random.choice(sequence)])
+    q = random.choice(sequence)
+    arr.append([random.uniform(pressure_min, pressure_max), q])
+    tot_time+=q
     
 file_path = os.path.join(target_directory, output_file)
 
@@ -28,9 +31,10 @@ file_path = os.path.join(target_directory, output_file)
 with open(file_path, "w") as file:
     for pressure, time in arr:
         for i in range((5*time)):
-            file.write(f"{float(pressure*i/(5*time))} {float(0.2)}\n")
+            file.write(f"{float(pressure*i/(5*time))} {float(0.1)}\n")
         file.write(f"{0.0} {5.0}\n")
+        tot_time+=5
 
-    
+print(tot_time)
 
 print(f"Test data written to {target_directory}")

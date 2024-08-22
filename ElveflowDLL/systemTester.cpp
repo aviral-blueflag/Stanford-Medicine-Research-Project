@@ -73,12 +73,12 @@ FILE* initialize() {
         exit(EXIT_FAILURE);
     }
 
-    Elveflow_Calibration_Load("Calib_08-09", Calibration, 1000);
+    Elveflow_Calibration_Load("Calib_08-14", Calibration, 1000);
 
     // cout << "wait ~2 minutes" << endl;
     // OB1_Calib(MyOB1_ID, Calibration, 1000);//Perform calibration ! ! ! Take about 2 minutes ! ! !
     // printf("calib done \n");
-    // error = Elveflow_Calibration_Save("Calib_08-09", Calibration, 1000); //save calibration in the selected path, if no path or non valid path, open prompt to ask the file name
+    // error = Elveflow_Calibration_Save("Calib_08-14", Calibration, 1000); //save calibration in the selected path, if no path or non valid path, open prompt to ask the file name
     // Check_Error(error);
     // printf("save done \n");
     // OB1_Destructor(MyOB1_ID);
